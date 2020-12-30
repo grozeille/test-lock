@@ -1,6 +1,8 @@
 package fr.grozeille.demo.model;
 
 import lombok.Data;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.client.RestTemplate;
 
 import javax.persistence.Column;
 import javax.persistence.Entity;
@@ -14,9 +16,4 @@ public class Container {
     private String containerId;
     @Column(name = "lambdaId")
     private String lambdaId;
-
-    public void callLambda() throws InterruptedException {
-        Thread.sleep(200);
-        System.out.println("Coucou " + lambdaId);
-    }
 }

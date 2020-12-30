@@ -1,8 +1,7 @@
 package fr.grozeille.demo;
 
-import fr.grozeille.demo.services.LockService;
 import fr.grozeille.demo.services.impl.DBLockService;
-import fr.grozeille.demo.services.impl.MyService;
+import fr.grozeille.demo.services.impl.ExecutorService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
@@ -20,13 +19,13 @@ public class DemoApplication {
 		SpringApplication.run(DemoApplication.class, args);
 	}
 
-	@Bean
-	public CommandLineRunner demo(final MyService myService, final DBLockService lockService) {
+	//@Bean
+	public CommandLineRunner demo(final ExecutorService executorService, final DBLockService lockService) {
 		return (args) -> {
 
 			if(args.length > 0) {
 				if(args[0].equalsIgnoreCase("init")) {
-					myService.buildInitData();
+					executorService.buildInitData();
 					return;
 				}
 				else {
@@ -40,7 +39,8 @@ public class DemoApplication {
 				final String lambdaId = String.valueOf(cpt+1);
 				Thread t = new Thread(() -> {
 					try {
-						myService.callLambda(lambdaId);
+						String result = executorService.callLambda(lambdaId);
+						log.info(result);
 					} catch (Exception e) {
 						log.error("Unable to call lambda "+lambdaId, e);
 					}

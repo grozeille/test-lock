@@ -2,19 +2,19 @@ package fr.grozeille.demo.services.impl;
 
 import fr.grozeille.demo.model.Container;
 import fr.grozeille.demo.model.Lambda;
-import fr.grozeille.demo.services.ExecutorPool;
-import fr.grozeille.demo.services.LambdaRepository;
-import fr.grozeille.demo.services.LockService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.RestTemplate;
 
 import javax.annotation.PostConstruct;
 
 @Service
 @Slf4j
-public class MyService {
+public class ExecutorService {
 
     @Autowired
     private DBLockService lockService;
@@ -25,8 +25,20 @@ public class MyService {
     @Autowired
     private DBExecutorPool executorPool;
 
+    private RestTemplate restTemplate = new RestTemplate();
+
     @Transactional(readOnly = false)
-    public void callLambda(String lambdaId) throws Exception {
+    public String callLambda(String lambdaId) throws Exception {
+        return this.callLambda(lambdaId, false, null);
+    }
+
+    @Transactional(readOnly = false)
+    public String callLambdaAsync(String lambdaId, String jobId) throws Exception {
+        return this.callLambda(lambdaId, true, jobId);
+    }
+
+    @Transactional(readOnly = false)
+    public String callLambda(String lambdaId, Boolean async, String jobId) throws Exception {
 
         // get the container for this lambda
         Lambda lambda = lambdaRepository.load(lambdaId);
@@ -78,7 +90,7 @@ public class MyService {
         // call the lambda
         try {
             log.info("Call for lambda " + lambda.getId() + " on container " + lambda.getContainerId() + "...");
-            container.callLambda();
+            return callLambda(container, async, jobId);
         }
         catch(Exception ex) {
             log.info("Call for lambda " + lambda.getId() + " on container " + lambda.getContainerId() + " failed, try again...");
@@ -113,8 +125,42 @@ public class MyService {
 
             // ...and call it again
             log.info("Call for lambda " + lambda.getId() + " on container " + lambda.getContainerId() + "...");
-            container.callLambda();
+            return callLambda(container, async, jobId);
 
+        }
+    }
+
+    private String callLambda(Container container, Boolean async, String jobId) throws Exception {
+
+        if(!async) {
+            ResponseEntity<String> response = restTemplate.postForEntity("http://localhost:8081/execute/" + container.getLambdaId(), null, String.class);
+
+            return response.getBody();
+        }
+        else {
+            ResponseEntity<String> response = restTemplate.postForEntity("http://localhost:8081/execute-async/" + container.getLambdaId() + "/" + jobId, null, String.class);
+            if(response.getStatusCode() == HttpStatus.ACCEPTED) {
+                // max 2h
+                Long timeout = System.currentTimeMillis() + (1000 * 60 * 60 * 2);
+
+                while(System.currentTimeMillis() < timeout) {
+                    response = restTemplate.getForEntity("http://localhost:8081/execute-async/" + container.getLambdaId() + "/" + jobId, null, String.class);
+                    if(response.getStatusCode() == HttpStatus.OK) {
+                        return response.getBody();
+                    }
+                    else if(response.getStatusCode() == HttpStatus.NOT_FOUND) {
+                        log.debug("Not executed yet, try again");
+                    }
+                    else {
+                        throw new Exception("Unexpected status from executor: "+response.getStatusCode());
+                    }
+                }
+
+                throw new Exception("Timeout after 2h");
+            }
+            else {
+                throw new Exception("Unable to submit the lambda for async execution");
+            }
         }
     }
 

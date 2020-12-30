@@ -12,3 +12,15 @@ CREATE TABLE IF NOT EXISTS LAMBDA  (
   containerId VARCHAR(250),
   lastUsedTimestamp bigint
 );
+
+--DROP TABLE IF EXISTS JOB;
+
+CREATE TABLE IF NOT EXISTS JOB  (
+  id VARCHAR(250) PRIMARY KEY,
+  lambdaId VARCHAR(250),
+  submitDateTimestamp bigint,
+  startDateTimestamp bigint,
+  endDateTimestamp bigint,
+  status VARCHAR(250),
+  result VARCHAR(250)
+);
