@@ -1,8 +1,6 @@
-package fr.grozeille.demo.model;
+package fr.grozeille.gateway.model;
 
 import lombok.Data;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.client.RestTemplate;
 
 import javax.persistence.Column;
 import javax.persistence.Entity;

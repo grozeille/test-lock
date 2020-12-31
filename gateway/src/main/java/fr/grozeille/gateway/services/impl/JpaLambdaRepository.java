@@ -1,6 +1,6 @@
-package fr.grozeille.demo.services.impl;
+package fr.grozeille.gateway.services.impl;
 
-import fr.grozeille.demo.model.Lambda;
+import fr.grozeille.gateway.model.Lambda;
 import org.springframework.data.repository.CrudRepository;
 import org.springframework.stereotype.Repository;
 

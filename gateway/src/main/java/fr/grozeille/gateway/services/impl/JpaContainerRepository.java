@@ -1,12 +1,9 @@
-package fr.grozeille.demo.services.impl;
+package fr.grozeille.gateway.services.impl;
 
-import fr.grozeille.demo.model.Container;
+import fr.grozeille.gateway.model.Container;
 import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.jpa.repository.QueryHints;
 import org.springframework.data.repository.CrudRepository;
 import org.springframework.stereotype.Repository;
-
-import javax.persistence.QueryHint;
 
 @Repository
 public interface JpaContainerRepository extends CrudRepository<Container, String> {

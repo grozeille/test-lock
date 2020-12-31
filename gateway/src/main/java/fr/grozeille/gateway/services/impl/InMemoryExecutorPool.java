@@ -1,11 +1,10 @@
-package fr.grozeille.demo.services.impl;
+package fr.grozeille.gateway.services.impl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import fr.grozeille.demo.model.Container;
-import fr.grozeille.demo.services.ExecutorPool;
+import fr.grozeille.gateway.model.Container;
+import fr.grozeille.gateway.services.ExecutorPool;
 import org.springframework.stereotype.Service;
 
-import javax.annotation.PostConstruct;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 

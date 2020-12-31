@@ -1,4 +1,4 @@
-package fr.grozeille.demo.model;
+package fr.grozeille.gateway.model;
 
 import lombok.Data;
 

@@ -1,9 +1,11 @@
-package fr.grozeille.demo.services.impl;
+package fr.grozeille.gateway.services.impl;
 
-import fr.grozeille.demo.model.Lambda;
-import fr.grozeille.demo.services.LambdaRepository;
+import fr.grozeille.gateway.model.Lambda;
+import fr.grozeille.gateway.services.LambdaRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+
+import java.util.Optional;
 
 @Service
 public class DBLambdaRepository implements LambdaRepository {
@@ -17,8 +19,8 @@ public class DBLambdaRepository implements LambdaRepository {
     }
 
     @Override
-    public Lambda load(String id) throws Exception {
-        return jpaLambdaRepository.findById(id).get();
+    public Optional<Lambda> load(String id) throws Exception {
+        return jpaLambdaRepository.findById(id);
     }
 
     @Override

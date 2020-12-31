@@ -1,5 +1,6 @@
-package fr.grozeille.demo.model;
+package fr.grozeille.gateway.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.Data;
 
 import javax.persistence.*;
@@ -30,5 +31,9 @@ public class Job {
     private String lambdaId;
     @Column(name = "result")
     private String result;
+
+    @JsonIgnore
+    @Column(name = "tokenHash")
+    private String tokenHash;
 
 }

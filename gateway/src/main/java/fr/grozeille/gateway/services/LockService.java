@@ -1,4 +1,4 @@
-package fr.grozeille.demo.services;
+package fr.grozeille.gateway.services;
 
 public interface LockService {
     void createLambdaLock(String lambdaId);

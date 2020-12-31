@@ -2,6 +2,9 @@ package fr.grozeille.executor.model;
 
 import lombok.Data;
 
+import java.util.ArrayList;
+import java.util.List;
+
 @Data
 public class Job {
     public enum JobStatus {
@@ -13,4 +16,7 @@ public class Job {
     private String lambdaId;
     private JobStatus status;
     private String result;
+    private String callbackUrl;
+    private int callbackTry = 0;
+    private List<Exception> callbackErrors = new ArrayList<>();
 }

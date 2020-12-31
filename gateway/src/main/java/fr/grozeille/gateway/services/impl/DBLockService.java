@@ -1,10 +1,10 @@
-package fr.grozeille.demo.services.impl;
+package fr.grozeille.gateway.services.impl;
 
 import com.google.common.base.Charsets;
 import com.google.common.hash.HashCode;
 import com.google.common.hash.HashFunction;
 import com.google.common.hash.Hashing;
-import fr.grozeille.demo.services.LockService;
+import fr.grozeille.gateway.services.LockService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;

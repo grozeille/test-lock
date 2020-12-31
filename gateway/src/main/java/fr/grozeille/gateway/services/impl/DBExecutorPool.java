@@ -1,7 +1,7 @@
-package fr.grozeille.demo.services.impl;
+package fr.grozeille.gateway.services.impl;
 
-import fr.grozeille.demo.model.Container;
-import fr.grozeille.demo.services.ExecutorPool;
+import fr.grozeille.gateway.model.Container;
+import fr.grozeille.gateway.services.ExecutorPool;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 

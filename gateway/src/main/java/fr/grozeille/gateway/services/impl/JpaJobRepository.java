@@ -1,6 +1,6 @@
-package fr.grozeille.demo.services.impl;
+package fr.grozeille.gateway.services.impl;
 
-import fr.grozeille.demo.model.Job;
+import fr.grozeille.gateway.model.Job;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.CrudRepository;
 import org.springframework.stereotype.Repository;

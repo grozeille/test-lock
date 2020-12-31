@@ -48,10 +48,16 @@
 		</dependency>
 
 		<dependency>
+			<groupId>org.liquibase</groupId>
+			<artifactId>liquibase-core</artifactId>
+		</dependency>
+
+		<dependency>
 			<groupId>org.projectlombok</groupId>
 			<artifactId>lombok</artifactId>
 			<optional>true</optional>
 		</dependency>
+
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-test</artifactId>
@@ -63,7 +69,7 @@
 				</exclusion>
 			</exclusions>
 		</dependency>
-	</dependencies>
+    </dependencies>
 
 	<build>
 		<plugins>

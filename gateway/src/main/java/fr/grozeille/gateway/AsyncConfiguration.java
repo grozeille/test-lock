@@ -1,4 +1,4 @@
-package fr.grozeille.demo;
+package fr.grozeille.gateway;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;

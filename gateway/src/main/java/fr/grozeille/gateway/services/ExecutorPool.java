@@ -1,6 +1,6 @@
-package fr.grozeille.demo.services;
+package fr.grozeille.gateway.services;
 
-import fr.grozeille.demo.model.Container;
+import fr.grozeille.gateway.model.Container;
 
 public interface ExecutorPool {
     Container getFreeContainer() throws Exception;

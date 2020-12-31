@@ -1,19 +1,15 @@
---DROP TABLE IF EXISTS CONTAINER;
-
+--liquibase formatted sql
+--changeset mathias.kluba:v1 splitStatements:true endDelimiter:;
 CREATE TABLE IF NOT EXISTS CONTAINER (
   containerId VARCHAR(250) PRIMARY KEY,
   lambdaId VARCHAR(250) NOT NULL
 );
-
---DROP TABLE IF EXISTS LAMBDA;
 
 CREATE TABLE IF NOT EXISTS LAMBDA  (
   id VARCHAR(250) PRIMARY KEY,
   containerId VARCHAR(250),
   lastUsedTimestamp bigint
 );
-
---DROP TABLE IF EXISTS JOB;
 
 CREATE TABLE IF NOT EXISTS JOB  (
   id VARCHAR(250) PRIMARY KEY,
@@ -22,5 +18,6 @@ CREATE TABLE IF NOT EXISTS JOB  (
   startDateTimestamp bigint,
   endDateTimestamp bigint,
   status VARCHAR(250),
+  tokenHash VARCHAR(250),
   result VARCHAR(250)
 );
