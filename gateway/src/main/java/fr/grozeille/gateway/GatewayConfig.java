@@ -13,4 +13,6 @@ public class GatewayConfig {
     private Integer asyncThreadpoolSize;
 
     private String executorUri;
+
+    private Integer lockTimeout;
 }

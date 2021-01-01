@@ -39,9 +39,9 @@ public class GatewayController {
     }
 
     @PostMapping("/init")
-    public void initData(@RequestParam(defaultValue = "4") Integer poolSize, @RequestParam(defaultValue = "4") Integer lambdaCount) throws Exception {
+    public void initData(@RequestParam(defaultValue = "4") Integer poolSize) throws Exception {
         log.info("Initialize with fake lambda");
-        this.executorService.buildInitData(poolSize, lambdaCount);
+        this.executorService.buildInitData(poolSize);
     }
 
     @PostMapping("/lambda/execute/{id}")

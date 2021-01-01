@@ -15,15 +15,11 @@ public class InMemoryExecutorPool implements ExecutorPool {
 
     private Map<String, String> containers = new ConcurrentHashMap<>();
 
+    private final Object lock = new Object();
+
     @Override
     public Container getFreeContainer() throws Exception {
-        for(String s : containers.values()) {
-            Container c = objectMapper.readValue(s, Container.class);
-            if(c.getLambdaId().equals("free")) {
-                return c;
-            }
-        }
-        return null;
+        return getContainerByLambdaId("free");
     }
 
     @Override
@@ -34,6 +30,28 @@ public class InMemoryExecutorPool implements ExecutorPool {
     @Override
     public Container getContainer(String c) throws Exception {
         return objectMapper.readValue(containers.get(c), Container.class);
+    }
+
+    @Override
+    public Container getContainerByLambdaId(String lambdaId) throws Exception {
+        for(String s : containers.values()) {
+            Container c = objectMapper.readValue(s, Container.class);
+            if(c.getLambdaId().equals(lambdaId)) {
+                return c;
+            }
+        }
+        return null;
+    }
+
+    @Override
+    public Container assignFirstFree(String lambdaId) throws Exception {
+        synchronized (this.lock) {
+            Container c = this.getContainerByLambdaId("free");
+            c.setLambdaId(lambdaId);
+            this.updateContainer(c);
+
+            return c;
+        }
     }
 
     @Override

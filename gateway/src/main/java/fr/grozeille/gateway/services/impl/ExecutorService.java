@@ -12,13 +12,20 @@ import fr.grozeille.gateway.model.exceptions.LambdaNotFoundException;
 import fr.grozeille.gateway.model.exceptions.TokenMismatchException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.ResponseEntity;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
 
 import javax.annotation.PostConstruct;
+import javax.sql.DataSource;
 import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 import java.util.UUID;
@@ -42,19 +49,25 @@ public class ExecutorService {
     @Autowired
     private GatewayConfig gatewayConfig;
 
+    @Autowired
+    @Qualifier("lockTransactionManager")
+    private PlatformTransactionManager lockTransactionManager;
+
+    private TransactionTemplate lockTransactionTemplate;
+
     private RestTemplate restTemplate = new RestTemplate();
 
     @PostConstruct
     public void init() throws Exception {
         this.startJobPollingThreads();
+        this.lockTransactionTemplate = new TransactionTemplate(this.lockTransactionManager);
+        this.lockTransactionTemplate.setIsolationLevel(TransactionDefinition.ISOLATION_SERIALIZABLE);
     }
 
-    @Transactional(readOnly = false)
     public String callLambda(String lambdaId) throws Exception {
         return this.callLambda(lambdaId, false, null, null);
     }
 
-    @Transactional(readOnly = false)
     public Job callLambdaAsync(String lambdaId) throws Exception {
         String jobId = UUID.randomUUID().toString();
 
@@ -77,99 +90,86 @@ public class ExecutorService {
         if(lambdaOptional.isEmpty()) {
             throw new LambdaNotFoundException(lambdaId);
         }
-        Lambda lambda = lambdaOptional.get();
-        Container container = null;
 
-        // if there's no container, pick a container from the pool
-        if(lambda.getContainerId() == null) {
-            log.info("No container for lambda " + lambdaId + ", try again with lock...");
-            lockService.lockLambda(lambda.getId());
-            log.info("Acquired lock for lambda " + lambdaId);
-            try {
-                // try if someone took the lock before us
-                lambda = lambdaRepository.load(lambdaId).get();
-                if(lambda.getContainerId() == null) {
-                    log.info("No container for lambda " + lambdaId + ", fetch free from the pool...");
-                    lockService.lockPool();
-                    log.info("Acquired lock for pool for lambda " + lambdaId);
-                    try {
-                        container = executorPool.getFreeContainer();
-                        if(container == null) {
-                            throw new Exception("No more free container from the pool");
-                        }
-                        container.setLambdaId(lambda.getId());
-                        executorPool.updateContainer(container);
-                        lambda.setContainerId(container.getContainerId());
-                        lambdaRepository.save(lambda);
-                        log.info("Lambda " + lambdaId + " associated to container " + container.getContainerId());
-                        // simulate the time to upload the source to the container
-                        Thread.sleep(3000);
-                    }
-                    finally {
-                        lockService.unlockPool();
-                        log.info("Lock for pool released by lambda " + lambdaId);
-                    }
-                }
-                else {
-                    container = executorPool.getContainer(lambda.getContainerId());
-                    log.info("Found container " + container.getContainerId() +  " for lambda " + lambdaId);
-                }
-            }
-            finally {
-                lockService.unlockLambda(lambda.getId());
-                log.info("Lock for lambda " + lambdaId + " released");
-            }
-
-        }
-        else {
-            container = executorPool.getContainer(lambda.getContainerId());
-            log.info("Found container " + container.getContainerId() +  " for lambda " + lambdaId);
-        }
+        Container container = getContainerForLambda(lambdaId);
 
         // call the lambda
         try {
-            log.info("Call for lambda " + lambda.getId() + " on container " + lambda.getContainerId() + "...");
+            log.info("Call for lambda " + lambdaId + " on container " + container.getContainerId() + "...");
             return callLambda(container, async, jobId, callbackUrl);
         }
         catch(Exception ex) {
-            log.info("Call for lambda " + lambda.getId() + " on container " + lambda.getContainerId() + " failed, try again...");
+            log.info("Call for lambda " + lambdaId + " on container " + container.getContainerId() + " failed, try again...");
             // if the container is dead, pick another container from the pool...
-            lockService.lockLambda(lambdaId);
-            log.info("Acquired lock for lambda " + lambdaId);
-            try {
-                // try if someone took the lock before us
-                lambda = lambdaRepository.load(lambdaId).get();
-                if (lambda.getContainerId().equals(lambda.getContainerId())) {
-                    log.info("No container for lambda " + lambdaId + ", fetch free from the pool...");
-                    lockService.lockPool();
-                    log.info("Acquired lock for pool for lambda " + lambdaId);
-                    try {
-                        container = executorPool.getFreeContainer();
-                        if(container == null) {
-                            throw new Exception("No more free container from the pool");
-                        }
-                        container.setLambdaId(lambda.getId());
-                        executorPool.updateContainer(container);
-                        lambda.setContainerId(container.getContainerId());
-                        lambdaRepository.save(lambda);
-                        log.info("Lambda " + lambdaId + " associated to container " + container.getContainerId());
-                    }
-                    finally {
-                        lockService.unlockPool();
-                        log.info("Lock for pool released by lambda " + lambdaId);
-                    }
-                }
-            }
-            finally {
-                lockService.unlockLambda(lambda.getId());
-                log.info("Lock for lambda " + lambdaId + " released");
-            }
+
+            container = getContainerForLambda(lambdaId);
 
             // ...and call it again
-            log.info("Call for lambda " + lambda.getId() + " on container " + lambda.getContainerId() + "...");
+            log.info("Call for lambda " + lambdaId + " on container " + container.getContainerId() + "...");
             return callLambda(container, async, jobId, callbackUrl);
-
         }
+    }
+
+    protected Container getContainerForLambda(String lambdaId) throws Exception {
+
+        return lockTransactionTemplate.execute(status -> {
+            try {
+
+                Container container = executorPool.getContainerByLambdaId(lambdaId);
+                // if there's no container, pick a container from the pool
+                if (container == null) {
+                    log.info("No container for lambda " + lambdaId + ", try again with lock...");
+                    try {
+                        lockService.lockLambda(lambdaId);
+                    } catch (Exception lex) {
+                        throw new Exception("Unable to acquire lock for lambda " + lambdaId, lex);
+                    }
+
+                    log.info("Acquired lock for lambda " + lambdaId);
+                    try {
+                        // try if someone took the lock before us for this lambda
+                        container = executorPool.getContainerByLambdaId(lambdaId);
+                        if (container == null) {
+                            log.info("No container for lambda " + lambdaId + " after lock, fetch free from the pool...");
+                            try {
+
+                                // get the first free from the pool, to make it not free anymore, but don't assign to the lambda yet,
+                                // until it's completely initialized
+                                container = executorPool.assignFirstFree("tentative#"+UUID.randomUUID().toString()+"#"+lambdaId);
+
+                                if (container == null) {
+                                    throw new Exception("Unable to find free container for lambda " + lambdaId);
+                                }
+
+                                log.info("Lambda " + lambdaId + " associated to container " + container.getContainerId());
+
+                                // simulate the time to upload the source to the container
+                                Thread.sleep(3000);
+
+                                // if everything is fine at this stage, we can finally assign the container to the lambda
+                                container.setLambdaId(lambdaId);
+                                this.executorPool.updateContainer(container);
+
+                            } catch (Exception ex) {
+                                throw new Exception("Unable to find free container for lambda " + lambdaId, ex);
+                            }
+                        } else {
+                            log.info("Found container " + container.getContainerId() + " for lambda " + lambdaId);
+                        }
+                    } finally {
+                        lockService.unlockLambda(lambdaId);
+                        log.info("Lock for lambda " + lambdaId + " released");
+                    }
+
+                } else {
+                    log.info("Found container " + container.getContainerId() + " for lambda " + lambdaId);
+                }
+                return container;
+
+            } catch (Exception ex) {
+                throw new RuntimeException(ex);
+            }
+        });
     }
 
     private String callLambda(Container container, Boolean async, String jobId, String callbackUrl) throws Exception {
@@ -208,23 +208,23 @@ public class ExecutorService {
     }
 
     @Transactional(readOnly = false)
-    public void buildInitData(int poolSize, int lambdaCount) throws Exception {
+    public void buildInitData(int poolSize) throws Exception {
+
+        // as of now, we can create only the same number of lambda as the pool size
+        // because there's no mechanism to create new container in the pool
 
         executorPool.initPool(poolSize);
 
         lambdaRepository.deleteAll();
 
-        for(int cpt = 0; cpt < lambdaCount; cpt++) {
+        for(int cpt = 0; cpt < poolSize; cpt++) {
             createLambda(String.valueOf(cpt+1));
         }
     }
 
-    @Transactional(readOnly = false)
-    public void createLambda(String id) throws Exception {
+    private void createLambda(String id) throws Exception {
         Lambda l = new Lambda();
         l.setId(id);
-        l.setContainerId(null);
-        l.setLastUsedTimestamp(null);
 
         lambdaRepository.save(l);
         lockService.createLambdaLock(l.getId());

@@ -24,8 +24,18 @@ public class DBExecutorPool implements ExecutorPool {
     }
 
     @Override
-    public Container getContainer(String c) throws Exception {
-        return jpaContainerRepository.findById(c).get();
+    public Container getContainer(String containerId) throws Exception {
+        return jpaContainerRepository.findById(containerId).get();
+    }
+
+    @Override
+    public Container getContainerByLambdaId(String lambdaId) throws Exception {
+        return jpaContainerRepository.findByLambdaId(lambdaId);
+    }
+
+    @Override
+    public Container assignFirstFree(String lambdaId) throws Exception {
+        return jpaContainerRepository.assignFirstFree(lambdaId);
     }
 
     @Override

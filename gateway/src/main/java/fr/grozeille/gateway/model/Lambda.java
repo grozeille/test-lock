@@ -11,8 +11,4 @@ import javax.persistence.Id;
 public class Lambda {
     @Id
     private String id;
-    @Column(name = "containerId")
-    private String containerId;
-    @Column(name = "lastUsedTimestamp")
-    private Long lastUsedTimestamp;
 }
