@@ -1,0 +1,249 @@
+# Executor deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  creationTimestamp: null
+  labels:
+    app: executor
+  name: executor
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: executor
+  strategy: {}
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: executor
+    spec:
+      containers:
+      - image: grozeille/executor:latest
+        name: executor
+        resources: {}
+status: {}
+---
+# Executor service
+apiVersion: v1
+kind: Service
+metadata:
+  creationTimestamp: null
+  labels:
+    app: executor
+  name: executor
+spec:
+  ports:
+  - name: http
+    port: 8083
+    targetPort: 8083
+  selector:
+    app: executor
+  type: ClusterIP
+status:
+  loadBalancer: {}
+---
+# PostgreSQL config map
+# can be replaced by secrets https://stackoverflow.com/questions/61143161/how-to-get-into-postgres-in-kubernetes-with-local-dev-minikube
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-credentials
+  labels:
+    app: postgres
+data:
+  POSTGRES_DB: postgres
+  POSTGRES_USER: postgres
+  POSTGRES_PASSWORD: mysecretpassword
+---
+# PostgreSQL persistent Volume
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: postgres-pv
+  labels:
+    type: local
+spec:
+  storageClassName: manual
+  capacity:
+    storage: 2Gi
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: /data/postgres-pv
+
+---
+# PostgreSQL persistent Volume Claim
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+  labels:
+    type: local
+spec:
+  storageClassName: manual
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+  volumeName: postgres-pv
+
+---
+# PostgreSQL deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres-deployment
+spec:
+  selector:
+    matchLabels:
+      app: postgres-container
+  template:
+    metadata:
+      labels:
+        app: postgres-container
+    spec:
+      containers:
+        - name: postgres-container
+          image: postgres
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: postgres-credentials
+                  key: POSTGRES_USER
+
+            - name: POSTGRES_DB
+              valueFrom:
+                configMapKeyRef:
+                  name: postgres-credentials
+                  key: POSTGRES_DB
+
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                configMapKeyRef:
+                  name: postgres-credentials
+                  key: POSTGRES_PASSWORD
+
+          ports:
+            - containerPort: 5432
+          volumeMounts:
+            - mountPath: /var/lib/postgresql/data
+              name: postgres-volume-mount
+      volumes:
+        - name: postgres-volume-mount
+          persistentVolumeClaim:
+            claimName: postgres-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgresql
+spec:
+  selector:
+    app: postgres-container
+  ports:
+    - port: 5432
+      protocol: TCP
+      targetPort: 5432
+  type: NodePort
+
+---
+# Gateway config map
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gateway-config
+  labels:
+    app: gateway
+data:
+  POSTGRES_DB: postgres
+  POSTGRES_USER: postgres
+  POSTGRES_PASSWORD: mysecretpassword
+
+---
+# Gateway deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  creationTimestamp: null
+  labels:
+    app: gateway
+  name: gateway
+spec:
+  replicas: 4
+  selector:
+    matchLabels:
+      app: gateway
+  strategy: {}
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        app: gateway
+    spec:
+      containers:
+        - image: grozeille/gateway:latest
+          name: gateway
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: postgres-credentials
+                  key: POSTGRES_USER
+
+            - name: POSTGRES_DB
+              valueFrom:
+                configMapKeyRef:
+                  name: postgres-credentials
+                  key: POSTGRES_DB
+
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                configMapKeyRef:
+                  name: postgres-credentials
+                  key: POSTGRES_PASSWORD
+          resources: {}
+status: {}
+---
+# Gateway service
+apiVersion: v1
+kind: Service
+metadata:
+  creationTimestamp: null
+  labels:
+    app: gateway
+  name: gateway
+spec:
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+  selector:
+    app: gateway
+  type: ClusterIP
+status:
+  loadBalancer: {}
+
+---
+# Gateway ingress
+# don't forget to install nginx ingress controller if you are using docker for windows
+# kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v0.43.0/deploy/static/provider/cloud/deploy.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: gateway-ingress
+spec:
+  rules:
+    - host: gateway.127.0.0.1.xip.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: gateway
+                port:
+                  number: 80
+

@@ -12,10 +12,11 @@
 	<artifactId>executor</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
 	<name>executor</name>
-	<description>Execut custom code</description>
+	<description>Execute custom code</description>
 
 	<properties>
 		<java.version>11</java.version>
+		<spring-boot.build-image.imageName>grozeille/executor</spring-boot.build-image.imageName>
 	</properties>
 
 	<dependencies>
@@ -37,6 +38,7 @@
 	</dependencies>
 
 	<build>
+		<finalName>${project.artifactId}</finalName>
 		<plugins>
 			<plugin>
 				<groupId>org.springframework.boot</groupId>

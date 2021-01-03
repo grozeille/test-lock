@@ -1,8 +1,10 @@
 package fr.grozeille.executor.rest;
 
+import fr.grozeille.executor.ExecutorConfig;
 import fr.grozeille.executor.model.ExecuteRequest;
 import fr.grozeille.executor.model.Job;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.client.RestTemplate;
@@ -20,12 +22,17 @@ import java.util.concurrent.TimeUnit;
 @Slf4j
 public class ExecutorController {
 
-    private final ArrayBlockingQueue<Job> toExecute = new ArrayBlockingQueue<>(10);
-    private final Map<String, Job> executed = new ConcurrentHashMap<>(10);
+    private ArrayBlockingQueue<Job> toExecute;
+    private Map<String, Job> executed = new ConcurrentHashMap<>();
     private static final int MAX_CALLBACK_TRY = 3;
+
+    @Autowired
+    private ExecutorConfig executorConfig;
 
     @PostConstruct
     public void init() {
+        toExecute = new ArrayBlockingQueue<>(executorConfig.getAsyncMaxQueue());
+
         Thread threadExecutor = new Thread(() -> {
             log.info("Async lambda call thread executor started...");
             while(true) {
@@ -78,7 +85,8 @@ public class ExecutorController {
 
     private String internalExecute(String id) throws InterruptedException {
         // simulate time to execute python
-        Thread.sleep(1000*10);
+        log.info("Simulating execution time: "+executorConfig.getExecutionTimeMs());
+        Thread.sleep(executorConfig.getExecutionTimeMs());
         return "Hello from "+id;
     }
 

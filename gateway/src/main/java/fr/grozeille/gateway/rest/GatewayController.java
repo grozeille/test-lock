@@ -6,7 +6,6 @@ import fr.grozeille.gateway.GatewayConfig;
 import fr.grozeille.gateway.model.Job;
 import fr.grozeille.gateway.model.exceptions.JobNotFoundException;
 import fr.grozeille.gateway.model.exceptions.TokenMismatchException;
-import fr.grozeille.gateway.services.impl.AsyncExecutor;
 import fr.grozeille.gateway.services.impl.ExecutorService;
 import fr.grozeille.gateway.services.impl.JpaJobRepository;
 import lombok.extern.slf4j.Slf4j;

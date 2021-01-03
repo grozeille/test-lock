@@ -16,6 +16,7 @@
 
 	<properties>
 		<java.version>11</java.version>
+		<spring-boot.build-image.imageName>grozeille/gateway</spring-boot.build-image.imageName>
 	</properties>
 
 	<dependencies>
@@ -72,6 +73,7 @@
     </dependencies>
 
 	<build>
+		<finalName>${project.artifactId}</finalName>
 		<plugins>
 			<plugin>
 				<groupId>org.springframework.boot</groupId>
