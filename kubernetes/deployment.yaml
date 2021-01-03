@@ -218,7 +218,7 @@ metadata:
 spec:
   ports:
     - name: http
-      port: 80
+      port: 8080
       targetPort: 8080
   selector:
     app: gateway
@@ -245,5 +245,34 @@ spec:
               service:
                 name: gateway
                 port:
-                  number: 80
+                  number: 8080
 
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: logstash-service
+spec:
+  type: ExternalName
+  externalName: logstash-service.kube-system.svc.cluster.local
+  ports:
+    - protocol: TCP
+      port: 5000
+      targetPort: 5000
+      name: syslog-tcp
+    - protocol: UDP
+      port: 5001
+      targetPort: 5001
+      name: syslog-udp
+    - protocol: TCP
+      port: 5044
+      targetPort: 5044
+      name: beats
+    - protocol: TCP
+      port: 5002
+      targetPort: 5002
+      name: http
+    - protocol: TCP
+      port: 9600
+      targetPort: 9600
+      name: api
