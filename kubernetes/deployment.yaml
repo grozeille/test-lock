@@ -236,7 +236,7 @@ metadata:
   name: gateway-ingress
 spec:
   rules:
-    - host: gateway.127.0.0.1.xip.io
+    - host: gateway.127.0.0.1.nip.io
       http:
         paths:
           - path: /

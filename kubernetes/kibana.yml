@@ -63,7 +63,7 @@ metadata:
     app: logs
 spec:
   rules:
-  - host: kibana.127.0.0.1.xip.io
+  - host: kibana.127.0.0.1.nip.io
     http:
       paths:
       - path: /

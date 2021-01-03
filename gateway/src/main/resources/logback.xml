@@ -7,7 +7,7 @@
     <appender name="logstash" class="net.logstash.logback.appender.LogstashTcpSocketAppender">
         <destination>logstash-service:5000</destination>
         <encoder class="net.logstash.logback.encoder.LogstashEncoder">
-            <customFields>{"app_name":"gateway"}</customFields>
+            <customFields>{"app_name":"gateway", "hostname": "${HOSTNAME}"}</customFields>
         </encoder>
     </appender>
 

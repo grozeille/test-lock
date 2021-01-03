@@ -138,7 +138,7 @@ metadata:
     app: logs
 spec:
   rules:
-    - host: elasticsearch.192.168.0.190.xip.io
+    - host: elasticsearch.127.0.0.1.nip.io
       http:
         paths:
           - path: /
