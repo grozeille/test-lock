@@ -33,3 +33,5 @@ build/
 .vscode/
 jmeter/jmeter.log
 jmeter/reports/
+jmeter/benchmark.jtl
+jmeter.log

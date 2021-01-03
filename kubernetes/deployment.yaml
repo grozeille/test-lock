@@ -276,3 +276,15 @@ spec:
       port: 9600
       targetPort: 9600
       name: api
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: elasticsearch-logging
+spec:
+  type: ExternalName
+  externalName: elasticsearch-logging.kube-system.svc.cluster.local
+  ports:
+    - port: 9200
+      protocol: TCP
+      targetPort: db

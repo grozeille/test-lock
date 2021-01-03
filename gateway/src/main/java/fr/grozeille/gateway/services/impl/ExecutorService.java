@@ -10,7 +10,11 @@ import fr.grozeille.gateway.model.Lambda;
 import fr.grozeille.gateway.model.exceptions.JobNotFoundException;
 import fr.grozeille.gateway.model.exceptions.LambdaNotFoundException;
 import fr.grozeille.gateway.model.exceptions.TokenMismatchException;
+import io.micrometer.core.instrument.*;
+import io.micrometer.core.instrument.Timer;
 import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.ResponseEntity;
@@ -21,18 +25,22 @@ import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.util.StopWatch;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
 
 import javax.annotation.PostConstruct;
 import javax.sql.DataSource;
 import java.nio.charset.StandardCharsets;
-import java.util.Optional;
-import java.util.UUID;
+import java.util.*;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 @Service
 @Slf4j
 public class ExecutorService {
+
+    private static final Logger performanceLogger = LoggerFactory.getLogger("ExecutorService.Performance");
 
     @Autowired
     private DBLockService lockService;
@@ -57,11 +65,38 @@ public class ExecutorService {
 
     private RestTemplate restTemplate = new RestTemplate();
 
+    @Autowired
+    private MeterRegistry registry;
+
+    private Map<String, Timer> timers = new HashMap<>();
+    private Map<String, AtomicInteger> gauges = new HashMap<>();
+
     @PostConstruct
     public void init() throws Exception {
         this.startJobPollingThreads();
         this.lockTransactionTemplate = new TransactionTemplate(this.lockTransactionManager);
         this.lockTransactionTemplate.setIsolationLevel(TransactionDefinition.ISOLATION_SERIALIZABLE);
+
+        timers.put("callLambda", registry.timer("lambda.calls.timer"));
+        String[] steps = new String[] {
+                "waitForTransaction",
+                "getContainerByLambdaIdWithoutLock",
+                "getContainerByLambdaIdWithLock",
+                "assignFirstFree",
+                "simulateSourceUpload",
+                "updateContainer",
+                "unlockLambda",
+                "lockLambda",
+                "waitForEndTransaction"
+        };
+
+        timers.put("getContainerForLambda", registry.timer("container.creations.timer",  Arrays.asList(Tag.of("task", "getContainerForLambda"),Tag.of("step", "all"))));
+        for(String step : steps) {
+            List<Tag> tags = Arrays.asList(Tag.of("task", "getContainerForLambda"), Tag.of("step", step));
+            timers.put("getContainerForLambda."+step, registry.timer("container.creations.timer", tags));
+            gauges.put("getContainerForLambda."+step, registry.gauge("container.creations.gauge", tags, new AtomicInteger(0)));
+        }
+
     }
 
     public String callLambda(String lambdaId) throws Exception {
@@ -84,6 +119,10 @@ public class ExecutorService {
     }
 
     private String callLambda(String lambdaId, Boolean async, String jobId, String callbackUrl) throws Exception {
+
+        StopWatch watch = new StopWatch("callLambda");
+        watch.start();
+
 
         // get the container for this lambda
         Optional<Lambda> lambdaOptional = lambdaRepository.load(lambdaId);
@@ -108,34 +147,53 @@ public class ExecutorService {
             log.info("Call for lambda " + lambdaId + " on container " + container.getContainerId() + "...");
             return callLambda(container, async, jobId, callbackUrl);
         }
+        finally {
+            watch.stop();
+            timers.get("callLambda").record(watch.getTotalTimeNanos(), TimeUnit.NANOSECONDS);
+            log.info(watch.shortSummary());
+        }
     }
 
     protected Container getContainerForLambda(String lambdaId) throws Exception {
+        final StopWatch watch = new StopWatch("getContainerForLambda");
 
-        return lockTransactionTemplate.execute(status -> {
-            try {
+        watch.start("getContainerByLambdaIdWithoutLock");
+        Container result = executorPool.getContainerByLambdaId(lambdaId);
+        watch.stop();
+        // if there's no container, pick a container from the pool
+        if (result == null) {
 
-                Container container = executorPool.getContainerByLambdaId(lambdaId);
-                // if there's no container, pick a container from the pool
-                if (container == null) {
+            watch.start("waitForTransaction");
+            result = lockTransactionTemplate.execute(status -> {
+                watch.stop();
+                try {
+
+                    Container container = null;
+
                     log.info("No container for lambda " + lambdaId + ", try again with lock...");
                     try {
+                        watch.start("lockLambda");
                         lockService.lockLambda(lambdaId);
+                        watch.stop();
                     } catch (Exception lex) {
                         throw new Exception("Unable to acquire lock for lambda " + lambdaId, lex);
                     }
 
                     log.info("Acquired lock for lambda " + lambdaId);
                     try {
+                        watch.start("getContainerByLambdaIdWithLock");
                         // try if someone took the lock before us for this lambda
                         container = executorPool.getContainerByLambdaId(lambdaId);
+                        watch.stop();
                         if (container == null) {
                             log.info("No container for lambda " + lambdaId + " after lock, fetch free from the pool...");
                             try {
 
+                                watch.start("assignFirstFree");
                                 // get the first free from the pool, to make it not free anymore, but don't assign to the lambda yet,
                                 // until it's completely initialized
                                 container = executorPool.assignFirstFree("tentative#"+UUID.randomUUID().toString()+"#"+lambdaId);
+                                watch.stop();
 
                                 if (container == null) {
                                     throw new Exception("Unable to find free container for lambda " + lambdaId);
@@ -143,12 +201,17 @@ public class ExecutorService {
 
                                 log.info("Lambda " + lambdaId + " associated to container " + container.getContainerId());
 
+                                watch.start("simulateSourceUpload");
                                 // simulate the time to upload the source to the container
                                 Thread.sleep(3000);
+                                watch.stop();
 
                                 // if everything is fine at this stage, we can finally assign the container to the lambda
                                 container.setLambdaId(lambdaId);
+
+                                watch.start("updateContainer");
                                 this.executorPool.updateContainer(container);
+                                watch.stop();
 
                             } catch (Exception ex) {
                                 throw new Exception("Unable to find free container for lambda " + lambdaId, ex);
@@ -157,19 +220,38 @@ public class ExecutorService {
                             log.info("Found container " + container.getContainerId() + " for lambda " + lambdaId);
                         }
                     } finally {
+                        watch.start("unlockLambda");
                         lockService.unlockLambda(lambdaId);
+                        watch.stop();
                         log.info("Lock for lambda " + lambdaId + " released");
                     }
 
-                } else {
-                    log.info("Found container " + container.getContainerId() + " for lambda " + lambdaId);
-                }
-                return container;
+                    watch.start("waitForEndTransaction");
+                    return container;
 
-            } catch (Exception ex) {
-                throw new RuntimeException(ex);
-            }
-        });
+                } catch (Exception ex) {
+                    throw new RuntimeException(ex);
+                }
+            });
+            watch.stop();
+        } else {
+            log.info("Found container " + result.getContainerId() + " for lambda " + lambdaId);
+        }
+
+        // gather metric data
+        for(StopWatch.TaskInfo t : watch.getTaskInfo()) {
+            String step = "getContainerForLambda."+t.getTaskName();
+            Timer timer = timers.get(step);
+            timer.record(t.getTimeNanos(), TimeUnit.NANOSECONDS);
+
+            AtomicInteger gauge = gauges.get(step);
+            float percentage = (t.getTimeNanos()* 100f)/watch.getTotalTimeNanos();
+            gauge.set(Math.round(percentage));
+        }
+        timers.get("getContainerForLambda").record(watch.getTotalTimeNanos(), TimeUnit.NANOSECONDS);
+        performanceLogger.info(watch.prettyPrint());
+
+        return result;
     }
 
     private String callLambda(Container container, Boolean async, String jobId, String callbackUrl) throws Exception {
